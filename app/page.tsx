@@ -1,69 +1,440 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+
+type Job = {
+  id: number;
+  company: string;
+  position: string;
+  status: string;
+  date?: string;
+};
+
+// Transformă data în format românesc: zz/ll/aaaa
+function formatDate(date?: string) {
+  if (!date) return "Nespecificată";
+
+  // Compatibilitate cu datele vechi: aaaa-ll-zz
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date.split("-").reverse().join("/");
+  }
+
+  return date;
+}
+
+// Verifică dacă data introdusă este reală
+function isValidDate(value: string) {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+
+  if (!match) return false;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  const parsedDate = new Date(year, month - 1, day);
+
+  return (
+    year >= 1000 &&
+    parsedDate.getFullYear() === year &&
+    parsedDate.getMonth() === month - 1 &&
+    parsedDate.getDate() === day
+  );
+}
 
 export default function Home() {
+  // Lista joburilor
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  // Formular
+  const [company, setCompany] = useState("");
+  const [position, setPosition] = useState("");
+  const [date, setDate] = useState("");
+
+  // Căutare și filtrare
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("All");
+
+  // Încărcăm joburile salvate
+  useEffect(() => {
+    try {
+      const savedJobs = localStorage.getItem("job-tracker");
+
+      if (savedJobs) {
+        const parsedJobs = JSON.parse(savedJobs);
+
+        if (Array.isArray(parsedJobs)) {
+          setJobs(parsedJobs);
+        }
+      }
+    } catch (error) {
+      console.error("Eroare la încărcarea joburilor:", error);
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+
+  // Salvăm automat modificările
+  useEffect(() => {
+    if (!loaded) return;
+
+    localStorage.setItem("job-tracker", JSON.stringify(jobs));
+  }, [jobs, loaded]);
+
+  // Adăugăm un job
+  function addJob() {
+    if (!company.trim() || !position.trim()) {
+      alert("Completează numele companiei și poziția!");
+      return;
+    }
+
+    if (date && !isValidDate(date)) {
+      alert("Introdu o dată validă în formatul zz/ll/aaaa!");
+      return;
+    }
+
+    const newJob: Job = {
+      id: Date.now(),
+      company: company.trim(),
+      position: position.trim(),
+      status: "Applied",
+      date: date || new Date().toLocaleDateString("en-GB"),
+    };
+
+    setJobs((previousJobs) => [...previousJobs, newJob]);
+
+    setCompany("");
+    setPosition("");
+    setDate("");
+  }
+
+  // Ștergem un job
+  function deleteJob(id: number) {
+    const confirmed = window.confirm(
+      "Sigur vrei să ștergi această aplicație?"
+    );
+
+    if (!confirmed) return;
+
+    setJobs((previousJobs) =>
+      previousJobs.filter((job) => job.id !== id)
+    );
+  }
+
+  // Edităm un job
+  function editJob(id: number) {
+    const job = jobs.find((item) => item.id === id);
+
+    if (!job) return;
+
+    const newCompany = window.prompt(
+      "Numele companiei:",
+      job.company
+    );
+
+    if (newCompany === null || !newCompany.trim()) return;
+
+    const newPosition = window.prompt(
+      "Poziția:",
+      job.position
+    );
+
+    if (newPosition === null || !newPosition.trim()) return;
+
+    const newDate = window.prompt(
+      "Data aplicării (zz/ll/aaaa):",
+      formatDate(job.date) === "Nespecificată"
+        ? ""
+        : formatDate(job.date)
+    );
+
+    if (newDate === null) return;
+
+    if (newDate && !isValidDate(newDate)) {
+      alert("Data introdusă nu este validă!");
+      return;
+    }
+
+    setJobs((previousJobs) =>
+      previousJobs.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              company: newCompany.trim(),
+              position: newPosition.trim(),
+              date: newDate,
+            }
+          : item
+      )
+    );
+  }
+
+  // Schimbăm statusul
+  function updateStatus(id: number, status: string) {
+    setJobs((previousJobs) =>
+      previousJobs.map((job) =>
+        job.id === id ? { ...job, status } : job
+      )
+    );
+  }
+
+  // Căutăm și filtrăm joburile
+  const filteredJobs = jobs.filter((job) => {
+    const searchText = search.toLowerCase().trim();
+
+    const matchesSearch =
+      job.company.toLowerCase().includes(searchText) ||
+      job.position.toLowerCase().includes(searchText);
+
+    const matchesFilter =
+      filter === "All" || job.status === filter;
+
+    return matchesSearch && matchesFilter;
+  });
+
+  // Statistici
+  const totalApplications = jobs.length;
+
+  const totalInterviews = jobs.filter(
+    (job) => job.status === "Interview"
+  ).length;
+
+  const totalOffers = jobs.filter(
+    (job) => job.status === "Offer"
+  ).length;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <main className="min-h-screen bg-slate-950 p-4 text-white sm:p-8">
+      <div className="mx-auto max-w-5xl">
+
+        {/* HEADER */}
+
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-emerald-400 sm:text-4xl">
+            💼 Job Application Tracker
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+
+          <p className="mt-3 text-slate-400">
+            Organizează și urmărește aplicațiile tale la joburi.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        </header>
+
+        {/* DASHBOARD */}
+
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+
+          <div className="rounded-xl bg-slate-900 p-6">
+            <p className="text-slate-400">
+              Total Applications
+            </p>
+
+            <h2 className="mt-2 text-3xl font-bold">
+              {totalApplications}
+            </h2>
+          </div>
+
+          <div className="rounded-xl bg-slate-900 p-6">
+            <p className="text-slate-400">
+              Interviews
+            </p>
+
+            <h2 className="mt-2 text-3xl font-bold text-blue-400">
+              {totalInterviews}
+            </h2>
+          </div>
+
+          <div className="rounded-xl bg-slate-900 p-6">
+            <p className="text-slate-400">
+              Offers
+            </p>
+
+            <h2 className="mt-2 text-3xl font-bold text-emerald-400">
+              {totalOffers}
+            </h2>
+          </div>
+
+        </section>
+
+        {/* FORMULAR */}
+
+        <section className="mt-8 rounded-xl bg-slate-900 p-6">
+
+          <h2 className="mb-5 text-xl font-bold">
+            ➕ Add New Job
+          </h2>
+
+          <label className="mb-2 block text-sm text-slate-400">
+            Company Name
+          </label>
+
+          <input
+            type="text"
+            placeholder="Ex: Google"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            className="mb-4 w-full rounded-lg bg-slate-800 p-3 text-white outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+
+          <label className="mb-2 block text-sm text-slate-400">
+            Job Position
+          </label>
+
+          <input
+            type="text"
+            placeholder="Ex: Frontend Developer"
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+            className="mb-4 w-full rounded-lg bg-slate-800 p-3 text-white outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+
+          <label className="mb-2 block text-sm text-slate-400">
+            📅 Application Date
+          </label>
+
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="zz/ll/aaaa"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="mb-2 w-full rounded-lg bg-slate-800 p-3 text-white outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+
+          <p className="mb-5 text-xs text-slate-500">
+            Exemplu: 18/11/2026. Dacă lași câmpul gol,
+            se folosește data curentă.
+          </p>
+
+          <button
+            onClick={addJob}
+            disabled={!loaded}
+            className="rounded-lg bg-emerald-500 px-6 py-3 font-bold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            + Add Job
+          </button>
+
+        </section>
+
+        {/* CĂUTARE ȘI FILTRARE */}
+
+        <section className="mt-8 grid gap-4 md:grid-cols-2">
+
+          <input
+            type="text"
+            placeholder="🔍 Search company or position..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="rounded-lg bg-slate-800 p-3 text-white outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="rounded-lg bg-slate-800 p-3 text-white"
           >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            <option value="All">All Applications</option>
+            <option value="Applied">Applied</option>
+            <option value="Interview">Interview</option>
+            <option value="Offer">Offer</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+
+        </section>
+
+        {/* LISTA JOBURILOR */}
+
+        <section className="mt-8">
+
+          <h2 className="mb-5 text-2xl font-bold">
+            📋 My Applications ({filteredJobs.length})
+          </h2>
+
+          {!loaded && (
+            <p className="text-slate-400">
+              Se încarcă aplicațiile...
+            </p>
+          )}
+
+          {loaded && jobs.length === 0 && (
+            <p className="rounded-xl bg-slate-900 p-6 text-slate-400">
+              Nu ai adăugat încă niciun job.
+            </p>
+          )}
+
+          {loaded &&
+            jobs.length > 0 &&
+            filteredJobs.length === 0 && (
+              <p className="rounded-xl bg-slate-900 p-6 text-slate-400">
+                Nu există joburi care corespund căutării.
+              </p>
+            )}
+
+          {loaded && filteredJobs.map((job) => (
+
+            <div
+              key={job.id}
+              className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-900 p-5"
+            >
+
+              <div>
+                <h3 className="text-xl font-bold">
+                  {job.position}
+                </h3>
+
+                <p className="mt-1 text-slate-400">
+                  🏢 {job.company}
+                </p>
+
+                <p className="mt-2 text-sm text-slate-500">
+                  📅 Data aplicării: {formatDate(job.date)}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+
+                <select
+                  value={job.status}
+                  onChange={(e) =>
+                    updateStatus(job.id, e.target.value)
+                  }
+                  className="rounded-lg bg-slate-800 p-2 text-white"
+                >
+                  <option value="Applied">Applied</option>
+                  <option value="Interview">Interview</option>
+                  <option value="Offer">Offer</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+
+                <button
+                  onClick={() => editJob(job.id)}
+                  className="rounded-lg bg-blue-500 px-4 py-2 text-white transition hover:bg-blue-600"
+                >
+                  ✏️ Edit
+                </button>
+
+                <button
+                  onClick={() => deleteJob(job.id)}
+                  className="rounded-lg bg-red-500 px-4 py-2 text-white transition hover:bg-red-600"
+                >
+                  🗑️ Delete
+                </button>
+
+              </div>
+
+            </div>
+
+          ))}
+
+        </section>
+
+        {/* FOOTER */}
+
+        <footer className="mt-12 border-t border-slate-800 pt-6 text-center text-sm text-slate-500">
+          Job Application Tracker • Built with Next.js & React
+        </footer>
+
+      </div>
+    </main>
   );
 }
